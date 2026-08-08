@@ -1,3 +1,2 @@
-duckduckgo-search
-g4f
-curl_cffi
+pip install streamlit duckduckgo_search g4f gTTS pypdf streamlit-mic-recorder
+
