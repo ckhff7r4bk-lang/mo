@@ -1,1 +1,3 @@
 duckduckgo-search
+g4f
+curl_cffi
