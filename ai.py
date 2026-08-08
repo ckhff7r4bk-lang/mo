@@ -3,27 +3,20 @@ import numpy as np
 import pickle
 import os
 import requests
-import base64
 from duckduckgo_search import DDGS
-from gtts import gTTS
+from openai import OpenAI
 
-# ==========================================
-# 1. إعدادات الحماية والأمان (تم إخفاء كلمات المرور)
-# ==========================================
-# ملاحظة: في المستقبل يفضل نقل هذه البيانات لملف .env
+# 1. إعدادات الحماية وجلب البيانات السرية بأمان من السحابة
 ADMIN_USER = "admin"
-ADMIN_PASSWORD = "my_private_pass_2026"  # كلمة سر الأدمن من الصورة
-
+ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 DESIGNER_USER = "designer@ai.com"
-DESIGNER_PASSWORD = "admin2026"         # كلمة سر المصمم من الصورة
+DESIGNER_PASSWORD = st.secrets["DESIGNER_PASSWORD"]
+OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 
-BRAIN_FILE = "master_brain.pkl"
 DATA_FILE = "master_data.pkl"
 
-# إعداد الصفحة وتسميتها (كما في السطر 18 من صورتك)
 st.set_page_config(page_title="منظومة الوعي الذكي", page_icon="🧠", layout="centered")
 
-# دالة مساعدة لتخزين بيانات التطوير الذاتي
 def save_brain_data(data):
     with open(DATA_FILE, "wb") as f:
         pickle.dump(data, f)
@@ -34,9 +27,7 @@ def load_brain_data():
             return pickle.load(f)
     return []
 
-# ==========================================
-# 2. نظام تسجيل الدخول (حساب عادي / أدمن)
-# ==========================================
+# 2. نظام تسجيل الدخول الآمن والموحد للمتاجر
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_role = "user"
@@ -44,13 +35,11 @@ if "logged_in" not in st.session_state:
 
 if not st.session_state.logged_in:
     st.title("🔒 تسجيل الدخول إلى المنظومة")
-    
-    tab1, tab2 = st.tabs(["الدخول العادي / المسؤول", "الدخول السريع (جوجل وآبل)"])
+    tab1, tab2 = st.tabs(["تسجيل الدخول اليدوي", "الدخول السريع (جوجل وآبل)"])
     
     with tab1:
         username = st.text_input("اسم المستخدم أو البريد الإلكتروني")
         password = st.text_input("كلمة المرور", type="password")
-        
         if st.button("دخول آمن"):
             if username == ADMIN_USER and password == ADMIN_PASSWORD:
                 st.session_state.logged_in = True
@@ -62,87 +51,72 @@ if not st.session_state.logged_in:
                 st.session_state.user_role = "designer"
                 st.session_state.username = username
                 st.rerun()
-            elif username and password: # حساب مستخدم عادي عشوائي للتجربة
-                st.session_state.logged_in = True
-                st.session_state.user_role = "user"
-                st.session_state.username = username
-                st.rerun()
             else:
                 st.error("بيانات الدخول غير صحيحة")
-                
     with tab2:
-        st.write("أزرار الدخول السريع المجهزة للمتاجر:")
-        if st.button("🔴 تسجيل الدخول بواسطة Google"):
+        if st.button("🔴 الدخول بواسطة Google"):
             st.session_state.logged_in = True
             st.session_state.user_role = "user"
             st.session_state.username = "Google_User"
             st.rerun()
-        if st.button("⚫ تسجيل الدخول بواسطة Apple"):
+        if st.button("⚫ الدخول بواسطة Apple"):
             st.session_state.logged_in = True
             st.session_state.user_role = "user"
             st.session_state.username = "Apple_User"
             st.rerun()
-
-# ==========================================
-# 3. واجهة المستخدم بعد تسجيل الدخول
-# ==========================================
 else:
-    # شريط علوي لمعلومات الحساب وتسجيل الخروج
     st.sidebar.title(f"👋 مرحباً {st.session_state.username}")
-    st.sidebar.write(f"رتبة الحساب: **{st.session_state.user_role}**")
-    
     if st.sidebar.button("تسجيل الخروج"):
         st.session_state.logged_in = False
         st.rerun()
 
-    # لوحة تحكم الأدمن (المسؤول)
     if st.session_state.user_role == "admin":
         st.title("🛠️ لوحة تحكم المسؤول (Admin Dashboard)")
-        st.subheader("الذاكرة التراكمية وتخزين معلومات الـ AI")
-        
         stored_data = load_brain_data()
         if stored_data:
-            st.write("المعلومات التي تعلمها الذكاء الاصطناعي وطوّر نفسه بها:")
             for item in stored_data:
                 st.info(item)
         else:
             st.write("الذاكرة فارغة حالياً.")
-            
-        if st.button("تصفير ومسح الذاكرة بالكامل"):
-            if os.path.exists(DATA_FILE):
-                os.remove(DATA_FILE)
-            st.success("تم مسح الذاكرة!")
-            st.rerun()
-            
-    # واجهة الشات والذكاء الاصطناعي للمستخدمين
     else:
+        # 3. نظام التراسل الحي والبحث التلقائي بالإنترنت
         st.title("🧠 منظومة الوعي والذكاء الاصطناعي")
-        st.write("اسأل الذكاء الاصطناعي، وسيبحث في الويب تلقائياً لتحديث نفسه.")
-
-        user_query = st.text_input("اكتب سؤالك هنا:")
+        user_query = st.text_input("تراسل معي واكتب سؤالك هنا:")
         
         if user_query:
-            st.write("🔍 جاري البحث في الويب وتوليد الإجابة...")
+            st.write("🔍 جاري البحث الذاتي في الويب والتفكير للإجابة عليك...")
             
-            # تشغيل محرك البحث المستقل تلقائياً (تلبية لطلبك)
+            web_context = ""
             try:
                 with DDGS() as ddgs:
-                    search_results = [r for r in ddgs.text(user_query, max_results=3)]
+                    search_results = [r for r in ddgs.text(user_query, max_results=2)]
+                web_context = "\n".join([res['body'] for res in search_results])
+            except Exception:
+                web_context = "تعذر الحصول على معلومات حية من الويب، سأعتمد على معرفتي الأساسية."
+
+            try:
+                client = OpenAI(api_key=OPENAI_API_KEY)
+                system_instruction = (
+                    "أنت ذكاء اصطناعي متطور وخارق تتحدث بثقة وعروبة مطلقة وتساعد المستخدم في كافة المجالات وتتعلم منه.\n"
+                    f"إليك بيانات حية من الويب للتوثيق والاستعانة بها: \n{web_context}"
+                )
                 
-                context = "\n".join([res['body'] for res in search_results])
-                st.success("🤖 تم جلب معلومات حية من الإنترنت بنجاح!")
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": system_instruction},
+                        {"role": "user", "content": user_query}
+                    ]
+                )
                 
-                # عرض نتائج البحث المبسطة للمستخدم
-                with st.expander("عرض المصادر المجلوبة من الويب"):
-                    for res in search_results:
-                        st.write(f"- [{res['title']}]({res['href']})")
-                        
-                # محاكاة حفظ المعلومة للتطوير الذاتي إذا كانت تحتوي على أمر حفظ
+                ai_reply = response.choices.message.content
+                st.success("🤖 رد الذكاء الاصطناعي:")
+                st.write(ai_reply)
+                
                 if "احفظ" in user_query or "تعلم" in user_query:
                     current_data = load_brain_data()
-                    current_data.append(user_query)
+                    current_data.append(f"سؤال المستخدم: {user_query} -> الرد: {ai_reply}")
                     save_brain_data(current_data)
-                    st.toast("تم حفظ المعلومة في الذاكرة التراكمية لتطوير الذات!")
-
+                    st.toast("تم حفظ البيانات في الذاكرة التراكمية لتطوير الذات!")
             except Exception as e:
-                st.error("تعذر الاتصال بالويب حالياً، جاري الإجابة من الذاكرة المحلية.")
+                st.error("الرجاء التأكد من إضافة مفتاح الذكاء الاصطناعي بنجاح في الإعدادات لتفعيل التراسل الحقيقي.")
