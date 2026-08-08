@@ -1,6 +1,4 @@
 streamlit
-duckduckgo_search
-g4f
-gTTS
-pypdf
-streamlit-mic-recorder
+scikit-learn
+numpy
+duckduckgo-search
