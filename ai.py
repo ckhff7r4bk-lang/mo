@@ -1,213 +1,155 @@
 import streamlit as st
+import numpy as np
+import pickle
+import os
+import time
+import threading
+import random
+from datetime import datetime
+from sklearn.neural_network import MLPClassifier
+from sklearn.feature_extraction.text import TfidfVectorizer
 from duckduckgo_search import DDGS
-import g4f
-from streamlit_mic_recorder import speech_to_text
-from gtts import gTTS
-import io
-import urllib.parse
-import hashlib
-from pypdf import PdfReader
 
-st.set_page_config(page_title="AuraAI Platform", page_icon="🧠", layout="centered")
+# إعداد ملفات الذاكرة الدائمة على الهارد ديسك
+BRAIN_FILE = "infinite_brain.pkl"
+TRANSFORMER_FILE = "infinite_transformer.pkl"
+DATA_FILE = "infinite_memory_data.pkl"
 
-st.markdown("""
-    <style>
-    .stApp {
-        background: radial-gradient(circle at 50% 50%, #1a102f 0%, #0b0c10 100%);
-        background-attachment: fixed;
-        color: #e2e8f0;
-    }
-    h1, h2, h3, h4, h5 {
-        color: #00f2fe !important;
-        text-shadow: 0px 0px 15px rgba(0, 242, 254, 0.4);
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        text-align: right;
-    }
-    .stChatMessage {
-        background: rgba(30, 34, 53, 0.6) !important;
-        backdrop-filter: blur(10px) !important;
-        border-radius: 16px !important;
-        border: 1px solid rgba(255, 255, 255, 0.05) !important;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3) !important;
-        margin-bottom: 15px !important;
-    }
-    hr { border-top: 1px solid rgba(0, 242, 254, 0.2) !important; }
-    div.stButton > button, div.stDownloadButton > button {
-        background: linear-gradient(45deg, #7b2ff7, #00f2fe) !important;
-        color: #ffffff !important;
-        border: none !important;
-        border-radius: 20px !important;
-        padding: 6px 16px !important;
-        font-weight: bold !important;
-        box-shadow: 0px 4px 12px rgba(123, 47, 247, 0.3) !important;
-        width: 100%;
-    }
-    .stTextInput > div > div > input, .stFileUploader > div {
-        background-color: #1e2235 !important;
-        color: #ffffff !important;
-        border: 1px solid #2d3250 !important;
-        border-radius: 10px !important;
-    }
-    audio { width: 100%; margin-top: 10px; border-radius: 12px; background-color: #1e2235; }
-    .stImage > img {
-        border-radius: 16px !important;
-        border: 1px solid rgba(0, 242, 254, 0.4) !important;
-        box-shadow: 0px 0px 25px rgba(0, 242, 254, 0.2);
-    }
-    </style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="ذكاء دائم التطور 24/7 مع السجلات", page_icon="⏳", layout="centered")
 
-if "users_db" not in st.session_state:
-    st.session_state.users_db = {"mohammed": hashlib.sha256("123456".encode()).hexdigest()}
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-if "username" not in st.session_state:
-    st.session_state.username = ""
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+st.title("⏳ منظومة الذكاء الاصطناعي دائمة التطور والتعلم")
+st.write("هذا النظام يحتوي على محرك خلفي يعمل على مدار الساعة؛ يبحر في الإنترنت ويطور شبكته العصبية ويخزن الذاكرة في كل الأوقات دون توقف!")
 
-def get_hash(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+# --- 📚 قائمة المواضيع الموسعة والشاملة لتعليم النظام في غيابك ---
+AUTO_TOPICS = [
+    "الذكاء الاصطناعي وتعلم الآلة", "استكشاف الفضاء والمجرات", "البرمجة الحيثية وتطوير النظم", 
+    "الطب النانوي والهندسة الحيوية", "الطاقة المتجددة والمستدامة", "الحوسبة الكمومية والتشفير", 
+    "تاريخ العلوم والاكتشافات", "الأمن السيبراني وحماية البيانات", "علم النفس السلوكي", 
+    "الهندسة الوراثية وتعديل الجينات", "اقتصاد المستقبل والعملات الرقمية", "علم الروبوتات والأتمتة الفائقة"
+]
 
-if not st.session_state.authenticated:
-    st.title("🔐 بوابة حماية AuraAI")
-    st.markdown("<p style='text-align: right; color: #a0aec0;'>الدخول السريع عبر الحسابات الرسمية:</p>", unsafe_allow_html=True)
-    col_g, col_a = st.columns(2)
-    with col_g:
-        if st.button("🔴 Google Login"):
-            st.session_state.authenticated = True
-            st.session_state.username = "Google_User"
-            st.toast("تم تسجيل الدخول عبر Google")
-            st.rerun()
-    with col_a:
-        if st.button("🍏 Apple Login"):
-            st.session_state.authenticated = True
-            st.session_state.username = "Apple_User"
-            st.toast("تم التحقق عبر Apple ID")
-            st.rerun()
+# --- محرك إدارة الذاكرة والتطوير في الخلفية ---
+def load_memory():
+    if os.path.exists(BRAIN_FILE) and os.path.exists(TRANSFORMER_FILE) and os.path.exists(DATA_FILE):
+        with open(BRAIN_FILE, "rb") as f: brain = pickle.load(f)
+        with open(TRANSFORMER_FILE, "rb") as f: transformer = pickle.load(f)
+        with open(DATA_FILE, "rb") as f: data = pickle.load(f)
+        return brain, transformer, data["texts"], data["labels"], data.get("logs", [])
+    else:
+        brain = MLPClassifier(hidden_layer_sizes=(50, 25), learning_rate_init=0.01, warm_start=True)
+        transformer = TfidfVectorizer(max_features=100)
+        return brain, transformer, [], [], []
 
-    st.write("---")
-    st.markdown("<p style='text-align: right; color: #a0aec0;'>أو استخدم النظام التقليدي:</p>", unsafe_allow_html=True)
-    tab1, tab2 = st.tabs(["تسجيل الدخول 🔑", "إنشاء حساب جديد ✨"])
-    with tab1:
-        u_in = st.text_input("اسم المستخدم", key="l_user")
-        p_in = st.text_input("كلمة المرور", type="password", key="l_pass")
-        if st.button("دخول المنصة 🚀"):
-            if u_in in st.session_state.users_db and st.session_state.users_db[u_in] == get_hash(p_in):
-                st.session_state.authenticated = True
-                st.session_state.username = u_in
-                st.rerun()
-            else:
-                st.error("❌ بيانات الدخول خاطئة")
-    with tab2:
-        nu = st.text_input("اسم مستخدم جديد", key="n_user")
-        np = st.text_input("كلمة مرور قوية", type="password", key="n_pass")
-        if st.button("تسجيل الحساب 🎉"):
-            if nu.strip() and np.strip() and nu not in st.session_state.users_db:
-                st.session_state.users_db[nu] = get_hash(np)
-                st.success("✅ تم التسجيل بنجاح")
+def save_memory(brain, transformer, texts, labels, logs):
+    with open(BRAIN_FILE, "wb") as f: pickle.dump(brain, f)
+    with open(TRANSFORMER_FILE, "wb") as f: pickle.dump(transformer, f)
+    with open(DATA_FILE, "wb") as f: pickle.dump({"texts": texts, "labels": labels, "logs": logs}, f)
 
-else:
-    col1, col2, col3 = st.columns(3)
-    with col1: st.title("🧠 AuraAI")
-    with col2:
-        txt = "".join([f"{m['role'].upper()}: {m['content']}\n\n" for m in st.session_state.messages])
-        st.download_button(label="💾 حفظ الشات", data=txt, file_name="AuraAI_Chat.txt")
-    with col3:
-        if st.button("🚪 خروج"):
-            st.session_state.authenticated, st.session_state.username, st.session_state.messages = False, "", []
-            st.rerun()
-            
-    st.markdown(f"<div style='color: #00f2fe; direction: rtl; text-align: right; font-weight: bold;'>مرحباً بك يا {st.session_state.username}</div>", unsafe_allow_html=True)
-    st.write("---")
-
-    st.markdown("##### 📁 مركز تحليل المستندات والملفات:")
-    up_file = st.file_uploader("ارفع ملف PDF أو TXT", type=["pdf", "txt"])
-    f_ctx = ""
-    if up_file is not None:
-        if up_file.name.endswith(".pdf"):
-            try:
-                reader = PdfReader(up_file)
-                f_ctx = "".join([page.extract_text() or "" for page in reader.pages])
-                st.toast("📎 تم ربط ملف PDF")
-            except: st.error("خطأ في ملف PDF")
-        elif up_file.name.endswith(".txt"):
-            f_ctx = up_file.read().decode("utf-8")
-            st.toast("📎 تم ربط ملف TXT")
-
-    if not st.session_state.messages:
-        st.session_state.messages.append({"role": "assistant", "content": f"أهلاً بك يا {st.session_state.username}! أنا AuraAI جاهز لمساعدتك عبر الويب، المستندات، أو توليد الصور بعبارة (ارسم لي...). تفضل بطلبك الآن! 🦾"})
-
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
-            if "image" in msg: st.image(msg["image"])
-            if "audio" in msg: st.audio(msg["audio"], format="audio/mp3")
-
-    def run_ai(q, ctx, mode="web"):
-        if mode == "file": prompt = f"Document context:\n{ctx}\n\nAnswer in Arabic to: '{q}'."
-        else: prompt = f"The user asks: '{q}'. Web context:\n{ctx}\n\nWrite response in Arabic."
-        try: return g4f.ChatCompletion.create(model=g4f.models.gpt_4, messages=[{"role": "user", "content": prompt}])
-        except: return f"🤖 البيانات المتاحة:\n\n{ctx[:400]}..."
-
-    def get_audio(text):
+# دالة محرك الخلفية المستقل (تشتغل كخيط منفصل تماماً عن الشاشة)
+def background_learning_loop():
+    while True:
+        topic = random.choice(AUTO_TOPICS)
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         try:
-            tts = gTTS(text=text.split("🔗")[0].strip(), lang='ar', slow=False)
-            fp = io.BytesIO()
-            tts.write_to_fp(fp)
-            fp.seek(0)
-            return fp.read()
-        except: return None
-
-    st.write("---")
-    m1, m2 = st.columns(2)
-    with m2: voice = speech_to_text(start_prompt="🎙️ تحدث بالصوت", stop_prompt="⏳ معالجة ونطق", language='ar', use_container_width=True, key='microphone')
-    box = st.chat_input("اكتب رسالتك، أو اطلب صورة بعبارة (ارسم لي...)...")
-    
-    inp = voice if voice else box
-
-    if inp:
-        st.session_state.messages.append({"role": "user", "content": inp})
-        clean = inp.strip().lower()
-        res_data = {"role": "assistant", "content": ""}
-
-        with st.chat_message("assistant"):
-            with st.spinner("🧠 جاري المعالجة..."):
-                if any(k in clean for k in ["صنعك", "طورك", "مبرمجك", "سواك", "المطور"]):
-                    rep = "👑 صانعي ومطوري هو المبرمج العبقري **محمد عطية المعلوي**، من **المملكة العربية السعودية** 🇸🇦. لقد قام بهندستي وبرمجتي بالكامل من الجوال ليتحدى الصعاب التقنية ويصنع هذا النظام الذكي!"
-                    st.write(rep)
-                    res_data["content"] = rep
-                elif any(k in clean for k in ["ارسم", "رسم", "صورة", "تخيل", "draw", "image"]):
-                    img_url = f"https://pollinations.ai{urllib.parse.quote(inp)}?width=1024&height=1024&nologo=true"
-                    rep = f"🎨 لقد قمت بتوليد ورسم الصورة بناءً على طلبك: **'{inp}'**"
-                    st.write(rep)
-                    st.image(img_url)
-                    res_data["content"], res_data["image"] = rep, img_url
-                elif f_ctx:
-                    rep = run_ai(inp, f_ctx, mode="file")
-                    st.write(rep)
-                    res_data["content"] = rep
-                else:
-                    try:
-                        with DDGS() as ddgs: results = list(ddgs.text(inp, max_results=3, region="wt-wt"))
-                        if results:
-                            web_txt = "\n".join([r['body'] for r in results])
-                            src = "\n\n🔗 **المصادر المرجعية:**\n" + "\n".join([f"{i}. [{r['title']}]({r['href']})" for i, r in enumerate(results, 1)])
-                            rep = f"{run_ai(inp, web_txt, mode='web')}{src}"
-                        else: rep = g4f.ChatCompletion.create(model=g4f.models.gpt_4, messages=[{"role": "user", "content": inp}])
-                    except:
-                        try: rep = g4f.ChatCompletion.create(model=g4f.models.gpt_4, messages=[{"role": "user", "content": inp}])
-                        except:
-                            if "سلام" in clean or "وعليكم" in clean: rep = "وعليكم السلام ورحمة الله وبركاته! أهلاً بك يا صديقي في AuraAI، كيف يمكنني مساعدتك اليوم؟"
-                            else: rep = f"🤖 استقبلت طلبك بنجاح: '{inp}'. السيرفرات تواجه ضغطاً مؤقتاً، لكنني متصل ومستعد لخدمتك دائماً."
-                    st.write(rep)
-                    res_data["content"] = rep
-
-                if res_data["content"]:
-                    aud = get_audio(res_data["content"])
-                    if aud:
-                        st.audio(aud, format="audio/mp3")
-                        res_data["audio"] = aud
+            b, t, texts, labels, logs = load_memory()
+            
+            # الإبحار في الإنترنت حياً عبر DuckDuckGo
+            scraped_articles = []
+            links_visited = []
+            with DDGS() as ddgs:
+                results = list(ddgs.text(topic, max_results=3))
+                for res in results:
+                    body = res.get('body', '')
+                    href = res.get('href', '')
+                    if body: 
+                        scraped_articles.append(body)
+                        if href: links_visited.append(href)
+            
+            if scraped_articles:
+                # دمج المقالات وتلقين الخلايا العصبية
+                for article in scraped_articles:
+                    texts.append(article)
+                    labels.append(1 if any(keyword in article for keyword in ["تكنولوجيا", "علم", "ذكاء", "تقنية"]) else 0)
                 
-                st.session_state.messages.append(res_data)
-                st.rerun()
+                if len(texts) > 1000:
+                    texts = texts[-1000:]
+                    labels = labels[-1000:]
+
+                # تدريب وتحديث الأوزان الرياضية للشبكة العصبية
+                X_trans = t.fit_transform(texts).toarray()
+                b.fit(X_trans, np.array(labels))
+                
+                # إضافة سجل جديد يوضح نجاح العملية
+                log_entry = f"⏱️ [{current_time}] تم دراسة موضوع: '{topic}' بنجاح عبر جلب وتدريب {len(scraped_articles)} مصادر جديدة."
+                logs.append(log_entry)
+                if len(logs) > 20: logs = logs[-20:] # الاحتفاظ بآخر 20 سجل فقط لحفظ المساحة
+                
+                save_memory(b, t, texts, labels, logs)
+                
+        except Exception as e:
+            # تسجيل أخطاء الإنترنت في حال انقطاع الشبكة لضمان استقرار الدورة
+            try:
+                b, t, texts, labels, logs = load_memory()
+                logs.append(f"⚠️ [{current_time}] فشل الإبحار مؤقتاً في موضوع: '{topic}' بسبب مشكلة اتصال.")
+                save_memory(b, t, texts, labels, logs)
+            except:
+                pass
+        
+        # أخذ استراحة لمدة 15 ثانية ثم تكرار العملية إلى الأبد
+        time.sleep(15)
+
+# تفعيل محرك الخلفية المستمر لمرة واحدة فقط عند تشغيل التطبيق لأول مرة
+if "background_thread_started" not in st.session_state:
+    thread = threading.Thread(target=background_learning_loop, daemon=True)
+    thread.start()
+    st.session_state.background_thread_started = True
+
+# استدعاء الذاكرة الحالية لعرضها على الشاشة أمام المستخدم
+brain, transformer, saved_texts, saved_labels, saved_logs = load_memory()
+
+# --- واجهة المستخدم الرسومية ---
+st.divider()
+
+col1, col2 = st.columns(2)
+with col1:
+    st.metric(label="⚙️ حالة محرك التطوير الخلفي", value="يعمل بنشاط 🟢")
+with col2:
+    st.metric(label="📚 حجم وعي النظام الممتص حالياً", value=f"{len(saved_texts)} مقال")
+
+st.caption("💡 نصيحة: انتظر بضع ثوانٍ ثم قم بتحديث الصفحة (Refresh)، وستلاحظ أن العداد والسجلات تتحدث تلقائياً!")
+
+st.divider()
+
+# 🔮 استجواب واختبار وعي ذكائك الاصطناعي في أي وقت
+st.subheader("🔮 اختبر ما تعلمه نظامك حتى هذه اللحظة")
+user_input = st.text_input("اكتب جملة عشوائية لنرى كيف سيحللها عقل نظامك المطور تلقائياً:")
+
+if st.button("🔮 استجواب الخلايا العصبية المحدثة"):
+    if len(saved_texts) > 0 and user_input:
+        try:
+            test_vector = transformer.transform([user_input]).toarray()
+            prediction = brain.predict(test_vector)
+            confidence = np.max(brain.predict_proba(test_vector)) * 100
+            
+            st.markdown("### 👑 القرار الصادر من العقل المتطور:")
+            if prediction == 1:
+                st.info(f"🧠 عقل نظامك يرى أن هذا النص يحمل طابعاً: **[ علمي / تكنولوجي ]** بنسبة يقين {confidence:.1f}%")
+            else:
+                st.info(f"🧠 عقل نظامك يرى أن هذا نص يحمل طابعاً: **[ عام / محايد ]** بنسبة يقين {confidence:.1f}%")
+        except Exception as e:
+            st.error(f"⚠️ النظام مشغول حالياً بتحديث خلاياه العصبية، اضغط مرة أخرى. ({str(e)})")
+    else:
+        st.warning("⚠️ انتظر بضع ثوانٍ حتى يمتص المحرك الخلفي أول درس له من الإنترنت!")
+
+st.divider()
+
+# 📊 📜 لوحة السجلات الحية لعرض ما يفعله النظام في غيابك
+st.subheader("📊 📜 لوحة السجلات الحية لعمليات التطوير")
+if saved_logs:
+    for log in reversed(saved_logs): # عرض الأحدث أولاً
+        if "بنجاح" in log:
+            st.success(log)
+        else:
+            st.warning(log)
+else:
+    st.info("📂 لا توجد سجلات بعد، جاري بدء أول عملية دراسة مستقلة الآن...")
