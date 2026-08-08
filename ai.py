@@ -8,10 +8,10 @@ import urllib.parse
 import hashlib
 from pypdf import PdfReader
 
-# 1. إعداد الصفحة وتحسين الواجهة لتناسب الجوال والآيفون
+# 1. إعداد الصفحة بشكل أساسي ومستقر
 st.set_page_config(page_title="منصة AuraAI الذكية", page_icon="🧠", layout="centered")
 
-# 🎨 إضافة لمسة الـ CSS الفخمة والوضع المظلم (Premium Cyberpunk Dark Mode)
+# 🎨 إضافة لمسة الـ CSS الفخمة والوضع المظلم
 st.markdown("""
     <style>
     .stApp {
@@ -164,8 +164,8 @@ else:
             "content": f"أهلاً بك يا {st.session_state.username}! أنا جاهز الآن بكامل قواي الذكية. يمكنك التحدث معي، أو رفع ملفات لتحليلها، أو طلبي برسم أي صورة تتخيلها فوراً! 🦾"
         })
 
-    # عرض المحادثات السابقة المخزنة
-    for msg in st.session_state.messages:
+    # عرض المحادثات السابقة المخزنة بشكل آمن للمتصفح
+    for idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
             if "image" in msg:
@@ -199,25 +199,24 @@ else:
     st.markdown("##### 🎙️ اطلب بالصوت أو ارسم بالذكاء:")
     voice_text = speech_to_text(start_prompt="اضغط للتحدث 🎤", stop_prompt="توقف وجاري التحويل ⏳", language='ar', use_container_width=True, key='microphone')
 
-    # التقاط المدخلات
+    # التقاط المدخلات المكتوبة بشكل منفصل لتفادي تعارض المتصفح
+    chat_box = st.chat_input("تحدث مع الذكاء أو اسأل عن الملف المرفوع...")
+    
     user_input = ""
     if voice_text:
         user_input = voice_text
-    else:
-        chat_box = st.chat_input("تحدث مع الذكاء أو اسأل عن الملف المرفوع...")
-        if chat_box:
-            user_input = chat_box
+    elif chat_box:
+        user_input = chat_box
 
     # معالجة الطلب الحين
     if user_input:
-        # حفظ وعرض سؤال المستخدم فوراً
+        # حفظ وعرض سؤال المستخدم في الجلسة فوراً
         st.session_state.messages.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.write(user_input)
         
         نص_تنظيف = user_input.strip().lower()
         current_msg_data = {"role": "assistant", "content": ""}
 
+        # إظهار الرد مباشرة في الواجهة دون استدعاء إعادة تحميل مكررة
         with st.chat_message("assistant"):
             with st.spinner("🧠 جاري المعالجة الإبداعية وصناعة الرد..."):
                 
