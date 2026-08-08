@@ -1,4 +1,1 @@
-streamlit
-scikit-learn
-numpy
-duckduckgo-search
+pip install streamlit scikit-learn numpy duckduckgo-search
