@@ -69,7 +69,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 def تشفير_كلمة_المرور(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+    return hashlib.sha256(password.encode()).
 # --- 🔐 بوابة حماية AuraAI وسجلات الدخول الذكي المطور ---
 if not st.session_state.authenticated:
     st.title("🔐 بوابة حماية AuraAI")
@@ -114,7 +114,8 @@ if not st.session_state.authenticated:
 
 # --- واجهة التطبيق الذكي الرئيسية بعد تسجيل الدخول الناجح ---
 else:
-    col1, col2, col3 = st.columns()
+    # تم إصلاح السطر المسبب للمشكلة بتمرير الرقم 3 داخل الأقواس لتحديد ثلاثة أعمدة
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.title("🧠 AuraAI")
     with col2:
@@ -141,7 +142,7 @@ else:
         elif uploaded_file.name.endswith(".txt"):
             file_context = uploaded_file.read().decode("utf-8")
             st.toast(f"📎 تم ربط المستند: {uploaded_file.name}", icon="📄")
-    if not st.session_state.messages:
+      if not st.session_state.messages:
         st.session_state.messages.append({
             "role": "assistant", 
             "content": f"أهلاً بك يا {st.session_state.username}! أنا AuraAI جاهز لمساعدتك عبر الويب، المستندات، أو توليد الصور بعبارة (ارسم لي...). تفضل بطلبك الآن! 🦾"
@@ -228,3 +229,4 @@ else:
                 
                 st.session_state.messages.append(current_msg_data)
                 st.rerun()
+  
