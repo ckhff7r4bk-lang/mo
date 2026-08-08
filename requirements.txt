@@ -1,1 +1,5 @@
-pip install langchain-text-splitters
+streamlit
+openai
+pypdf
+pandas
+langchain-text-splitters
