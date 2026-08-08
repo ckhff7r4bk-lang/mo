@@ -1,2 +1,6 @@
-pip install streamlit duckduckgo_search g4f gTTS pypdf streamlit-mic-recorder
-
+streamlit
+duckduckgo_search
+g4f
+gTTS
+pypdf
+streamlit-mic-recorder
