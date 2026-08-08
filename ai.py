@@ -7,8 +7,8 @@ from duckduckgo_search import DDGS
 from openai import OpenAI
 
 # 1. إعدادات الحماية وجلب البيانات السرية بأمان من السحابة
-ADMIN_USER = "admin"
-ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
+ADMIN_USER = "mom"
+ADMIN_PASSWORD = st.secrets["aamm"]
 DESIGNER_USER = "designer@ai.com"
 DESIGNER_PASSWORD = st.secrets["DESIGNER_PASSWORD"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
