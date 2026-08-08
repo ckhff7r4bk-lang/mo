@@ -1,6 +1,1 @@
-streamlit
-scikit-learn
-numpy
-duckduckgo-search
-requests
-gTTS
+pip install streamlit numpy duckduckgo-search gTTS requests python-dotenv
