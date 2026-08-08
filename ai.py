@@ -138,48 +138,51 @@ with col2:
     st.metric(label="📚 إجمالي المقالات الممتصة بالقرص الصلب", value=f"{len(saved_texts)} مقال")
 
 # زر آمن لتسجيل الخروج الفوري وإعادة قفل المنظومة حماية لملفاتك
-if St.sidebar.button("🔒 تسجيل الخروج وقفل الواجهة"):
-    St.session_state.authenticated = False
-    St.rerun()
+if st.sidebar.button("🔒 تسجيل الخروج وقفل الواجهة"):
+    st.session_state.authenticated = False
+    st.rerun()
 
 # زر جانبي لمسح عقل النظام تماماً وإعادة تصفير ذاكرته التراكمية
 if st.sidebar.button("🗑️ تصفير وإبادة وعي النظام الحسي"):
-    For file in [BRAIN_FILE, TRANSFORMER_FILE, DATA_FILE]:
-        If os.path.exists(file): os.remove(file)
-    St.success("❌ تم مسح الهارد ديسك وإعادة الخلايا العصبية لطور البدائية بنجاح!")
-    St.rerun()
+    for file in [BRAIN_FILE, TRANSFORMER_FILE, DATA_FILE]:
+        if os.path.exists(file): 
+            os.remove(file)
+    st.success("❌ تم مسح الهارد ديسك وإعادة الخلايا العصبية لطور البدائية بنجاح!")
+    st.rerun()
 
-St.divider()
+st.divider()
 
 # 🔮 2. استجواب واختبار وعي ذكائك الاصطناعي المطور محلياً
-St.subheader("🔮 اختبر قرارات خلايا نظامك العصبية في هذه اللحظة")
+st.subheader("🔮 اختبر قرارات خلايا نظامك العصبية في هذه اللحظة")
 user_input = st.text_input("اكتب أي جملة أو موضوع عشوائي لنرى كيف سيحلله عقلك المستقل تلقائياً:")
 
 if st.button("🔮 استجوب الذاكرة الدائمة"):
-    If len(saved_texts) > 0 and user_input:
-        Try:
+    if len(saved_texts) > 0 and user_input:
+        try:
             # تحويل جملة الاختبار لبيانات رقمية ومطابقتها بذاكرة الـ pkl المستعاة
-            Test_vector = transformer.transform([user_input]).toarray()
-            Prediction = brain.predict(test_vector)
-            Confidence = np.max(brain.predict_proba(test_vector)) * 100
+            test_vector = transformer.transform([user_input]).toarray()
+            prediction = brain.predict(test_vector)
+            confidence = np.max(brain.predict_proba(test_vector)) * 100
             
-            St.markdown("### 👑 القرار الرياضي الصادر من عقلك الخاص:")
-            If prediction == 1:
-                St.info(f"🧠 عقل نظامك المطور يتوقع أن هذا النص يحمل طابعاً: **[ علمي / تقني ]** بنسبة يقين {confidence:.1f}%")
-            Else:
-                St.info(f"🧠 عقل نظامك المطور يتوقع أن هذا النص يحمل طابعاً: **[ عام / محايد ]** بنسبة يقين {confidence:.1f}%")
-        Except Exception as e:
-            St.error("⚠️ النظام يقوم بعملية تحديث سريعة لخلاياه العصبية الآن، اضغط مجدداً للاستجواب.")
-    Else:
-        St.warning("⚠️ انتظر بضع ثوانٍ حتى يقوم المحرك الخلفي بجمع أولى المقالات من الإنترنت لبناء وعيه الأول!")
+            st.markdown("### 👑 القرار الرياضي الصادر من عقلك الخاص:")
+            if prediction == 1:
+                st.info(f"🧠 عقل نظامك المطور يتوقع أن هذا النص يحمل طابعاً: **[ علمي / تقني ]** بنسبة يقين {confidence:.1f}%")
+            else:
+                st.info(f"🧠 عقل نظامك المطور يتوقع أن هذا النص يحمل طابعاً: **[ عام / محايد ]** بنسبة يقين {confidence:.1f}%")
+        except Exception as e:
+            st.error("⚠️ النظام يقوم بعملية تحديث سريعة لخلاياه العصبية الآن، اضغط مجدداً للاستجواب.")
+    else:
+        st.warning("⚠️ انتظر بضع ثوانٍ حتى يقوم المحرك الخلفي بجمع أولى المقالات من الإنترنت لبناء وعيه الأول!")
 
-St.divider()
+st.divider()
 
 # 📊 📜 لوحة السجلات الحية لعمليات التطوير لعرض ما يفعله النظام في غيابك
-St.subheader("📊 📜 لوحة السجلات الحية للتعلم المستمر (24/7 Logs)")
-If saved_logs:
-    For log in reversed(saved_logs): # عرض السجل الأحدث في الأعلى دائماً لراحة عين المستخدم
-        If "بنجاح" in log: st.success(log)
-        Else: st.warning(log)
+st.subheader("📊 📜 لوحة السجلات الحية للتعلم المستمر (24/7 Logs)")
+if saved_logs:
+    for log in reversed(saved_logs): # عرض السجل الأحدث في الأعلى دائماً لراحة عين المستخدم
+        if "بنجاح" in log: 
+            st.success(log)
+        else: 
+            st.warning(log)
 else:
-    St.info("📂 لا توجد سجلات تاريخية بعد، جاري بدء أول عملية إبحار وبحث مستقله وتلقيم الخلايا الآن...")
+    st.info("📂 لا توجد سجلات تاريخية بعد، جاري بدء أول عملية إبحار وبحث مستقله وتلقيم الخلايا الآن...")
