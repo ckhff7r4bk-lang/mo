@@ -6,12 +6,17 @@ import requests
 from duckduckgo_search import DDGS
 from openai import OpenAI
 
-# 1. إعدادات الحماية وجلب البيانات السرية بأمان من السحابة
-ADMIN_USER = "mom"
-ADMIN_PASSWORD = st.secrets["aamm"]
+# ==========================================
+# 1. إعدادات الحماية المباشرة (حل مشكلة الخطأ الفوري)
+# ==========================================
+ADMIN_USER = "admin"
+ADMIN_PASSWORD = "my_private_pass_2026"  # تم التعديل ليعمل مباشرة بدون سيكرتس
+
 DESIGNER_USER = "designer@ai.com"
-DESIGNER_PASSWORD = st.secrets["DESIGNER_PASSWORD"]
-OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+DESIGNER_PASSWORD = "admin2026"
+
+# جلب مفتاح الذكاء الاصطناعي (إذا لم يتوفر، سيعمل كود البحث في الويب)
+OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", "sk-placeholder")
 
 DATA_FILE = "master_data.pkl"
 
@@ -27,7 +32,9 @@ def load_brain_data():
             return pickle.load(f)
     return []
 
-# 2. نظام تسجيل الدخول الآمن والموحد للمتاجر
+# ==========================================
+# 2. نظام تسجيل الدخول الآمن
+# ==========================================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_role = "user"
@@ -79,12 +86,12 @@ else:
         else:
             st.write("الذاكرة فارغة حالياً.")
     else:
-        # 3. نظام التراسل الحي والبحث التلقائي بالإنترنت
+        # 3. نظام التراسل والبحث التلقائي في الويب
         st.title("🧠 منظومة الوعي والذكاء الاصطناعي")
         user_query = st.text_input("تراسل معي واكتب سؤالك هنا:")
         
         if user_query:
-            st.write("🔍 جاري البحث الذاتي في الويب والتفكير للإجابة عليك...")
+            st.write("🔍 جاري البحث الذاتي في الويب والتفكير لإجابة دقيقة...")
             
             web_context = ""
             try:
@@ -92,31 +99,31 @@ else:
                     search_results = [r for r in ddgs.text(user_query, max_results=2)]
                 web_context = "\n".join([res['body'] for res in search_results])
             except Exception:
-                web_context = "تعذر الحصول على معلومات حية من الويب، سأعتمد على معرفتي الأساسية."
+                web_context = "تعذر جلب بيانات حية من الويب حالياً."
 
-            try:
-                client = OpenAI(api_key=OPENAI_API_KEY)
-                system_instruction = (
-                    "أنت ذكاء اصطناعي متطور وخارق تتحدث بثقة وعروبة مطلقة وتساعد المستخدم في كافة المجالات وتتعلم منه.\n"
-                    f"إليك بيانات حية من الويب للتوثيق والاستعانة بها: \n{web_context}"
-                )
+            # محاولة التشغيل عبر OpenAI، وإذا لم يوضع المفتاح تجيب المنظومة عبر نتائج الويب مباشرة
+            if OPENAI_API_KEY != "sk-placeholder":
+                try:
+                    client = OpenAI(api_key=OPENAI_API_KEY)
+                    response = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {"role": "system", "content": f"أنت ذكاء اصطناعي متطور. إليك سياق الويب: {web_context}"},
+                            {"role": "user", "content": user_query}
+                        ]
+                    )
+                    ai_reply = response.choices.message.content
+                    st.success("🤖 رد الذكاء الاصطناعي:")
+                    st.write(ai_reply)
+                except Exception:
+                    st.warning("تعذر الاتصال بـ OpenAI، إليك البيانات المجلوبة من الإنترنت:")
+                    st.write(web_context)
+            else:
+                st.info("🤖 تم جلب النتائج مباشرة من محرك البحث لعدم ربط مفتاح الحساب:")
+                st.write(web_context)
                 
-                response = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[
-                        {"role": "system", "content": system_instruction},
-                        {"role": "user", "content": user_query}
-                    ]
-                )
-                
-                ai_reply = response.choices.message.content
-                st.success("🤖 رد الذكاء الاصطناعي:")
-                st.write(ai_reply)
-                
-                if "احفظ" in user_query or "تعلم" in user_query:
-                    current_data = load_brain_data()
-                    current_data.append(f"سؤال المستخدم: {user_query} -> الرد: {ai_reply}")
-                    save_brain_data(current_data)
-                    st.toast("تم حفظ البيانات في الذاكرة التراكمية لتطوير الذات!")
-            except Exception as e:
-                st.error("الرجاء التأكد من إضافة مفتاح الذكاء الاصطناعي بنجاح في الإعدادات لتفعيل التراسل الحقيقي.")
+            if "احفظ" in user_query or "تعلم" in user_query:
+                current_data = load_brain_data()
+                current_data.append(user_query)
+                save_brain_data(current_data)
+                st.toast("تم حفظ البيانات بنجاح!")
