@@ -1,179 +1,204 @@
 import streamlit as st
-import json
+import numpy as np
+import pickle
 import os
+import requests
+import base64
+from duckduckgo_search import DDGS
 from openai import OpenAI
+from gtts import gTTS
 
-# إعداد مكتبة OpenAI
-try:
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-except Exception:
-    client = None
+# ==========================================
+# 1. إعدادات الحماية والتصميم الملكي الفاخر
+# ==========================================
+ADMIN_USER = "admin"
+ADMIN_PASSWORD = "my_private_pass_2026"
+DESIGNER_USER = "designer@ai.com"
+DESIGNER_PASSWORD = "admin2026"
 
-# 1. إعداد ملف الحفظ التلقائي
-SAVE_FILE = "chat_history_backup.json"
+OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", "sk-placeholder")
+DATA_FILE = "master_data.pkl"
 
-def load_chat_backup():
-    if os.path.exists(SAVE_FILE):
-        try:
-            with open(SAVE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            st.error(f"حدث خطأ أثناء تحميل ملف النسخ الاحتياطي: {e}")
-            return {}
-    return {}
+st.set_page_config(page_title="المنظومة الخارقة - الذكاء المطلق", page_icon="⚡", layout="centered")
 
-def save_chat_backup():
+st.markdown("""
+    <style>
+    .stApp { background-color: #030712; color: #f9fafb; }
+    .user-bubble { background-color: #1e3a8a; color: white; padding: 15px 20px; border-radius: 22px 22px 22px 5px; max-width: 80%; font-size: 14px; box-shadow: 0 4px 15px rgba(30, 58, 138, 0.3); margin-bottom: 15px; border: 1px solid #2563eb; }
+    .ai-bubble { background-color: #111827; color: #f9fafb; padding: 15px 20px; border-radius: 22px 22px 5px 22px; max-width: 80%; font-size: 14px; border: 1px solid #d97706; box-shadow: 0 4px 20px rgba(217, 119, 6, 0.15); margin-bottom: 15px; }
+    </style>
+""", unsafe_allow_html=True)
+
+def save_brain_data(data):
+    with open(DATA_FILE, "wb") as f: 
+        pickle.dump(data, f)
+
+def load_brain_data():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "rb") as f: 
+            return pickle.load(f)
+    return []
+
+def play_voice(text):
     try:
-        with open(SAVE_FILE, "w", encoding="utf-8") as f:
-            json.dump(st.session_state.rooms, f, ensure_ascii=False, indent=4)
-    except Exception as e:
-        st.error(f"فشل الحفظ التلقائي للمحادثة: {e}")
+        clean_text = text.replace("*", "").replace("#", "")[:120]
+        tts = gTTS(text=clean_text, lang='ar', slow=False)
+        tts.save("response.mp3")
+        with open("response.mp3", "rb") as f: 
+            audio_bytes = f.read()
+        audio_base64 = base64.b64encode(audio_bytes).decode()
+        audio_html = f'<audio src="data:audio/mp3;base64,{audio_base64}" autoplay style="display:none;"></audio>'
+        st.markdown(audio_html, unsafe_allow_html=True)
+        os.remove("response.mp3")
+    except Exception: 
+        pass
 
-# 2. تهيئة الـ Session State
-if "rooms" not in st.session_state:
-    st.session_state.rooms = load_chat_backup()
-
-if "current_room" not in st.session_state:
-    st.session_state.current_room = list(st.session_state.rooms.keys()) if st.session_state.rooms else "المحادثة الأولى"
-
-if st.session_state.current_room not in st.session_state.rooms:
-    st.session_state.rooms[st.session_state.current_room] = []
-    save_chat_backup()
+if "openai_messages" not in st.session_state: 
+    st.session_state.openai_messages = []
+if "chat_history" not in st.session_state: 
+    st.session_state.chat_history = []
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.user_role = "user"
+    st.session_state.username = ""
 
 # ==========================================
-# 3. القائمة الجانبية (Sidebar) لإدارة الغرف
+# 2. واجهة الدخول الموحدة للأسواق
 # ==========================================
-with st.sidebar:
-    st.title("📂 إدارة المحادثات")
+if not st.session_state.logged_in:
+    st.markdown("""
+        <div style="background: linear-gradient(135deg, #090d16, #1e1b4b); padding: 35px; border-radius: 28px; text-align: center; border: 1px solid #d97706; margin-bottom: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.5);">
+            <h1 style="color: #f59e0b; margin: 0; font-size: 32px; font-weight: 900; letter-spacing: 1px;">⚡ ULTRA AI SUPREMACY</h1>
+            <p style="color: #94a3b8; font-size: 14px; margin-top: 5px;">أقوى منظومة ذكاء مستقلة لعام 2026</p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    # إنشاء غرفة جديدة
-    new_room_name = st.text_input("➕ إنشاء غرفة محادثة جديدة:", key="new_room_input")
-    if st.button("إنشاء الغرفة", use_container_width=True) and new_room_name.strip():
-        room_name_clean = new_room_name.strip()
-        if room_name_clean not in st.session_state.rooms:
-            st.session_state.rooms[room_name_clean] = []
-            st.session_state.current_room = room_name_clean
-            save_chat_backup()
-            st.rerun()
-
-    st.divider()
-
-    # عرض الغرف الحالية
-    st.subheader("💬 غرفك الحالية")
-    for room in list(st.session_state.rooms.keys()):
-        col1, col2 = st.columns([0.8, 0.2])
-        
+    tab1, tab2 = st.tabs(["🔒 الدخول بكلمة السر", "🌐 الدخول بحسابات المتاجر"])
+    with tab1:
+        username = st.text_input("اسم المستخدم أو الإيميل")
+        password = st.text_input("كلمة المرور الحامية", type="password")
+        if st.button("ولوج آمن للمنظومة 🚀", use_container_width=True):
+            if username == ADMIN_USER and password == ADMIN_PASSWORD:
+                st.session_state.logged_in = True
+                st.session_state.user_role = "admin"
+                st.session_state.username = username
+                st.rerun()
+            elif username == DESIGNER_USER and password == DESIGNER_PASSWORD:
+                st.session_state.logged_in = True
+                st.session_state.user_role = "designer"
+                st.session_state.username = username
+                st.rerun()
+            else: 
+                st.error("بيانات الحماية غير صحيحة.")
+    with tab2:
+        col1, col2 = st.columns(2)
         with col1:
-            is_active = room == st.session_state.current_room
-            label = f"🔹 {room}" if is_active else f"📄 {room}"
-            if st.button(label, key=f"select_{room}", use_container_width=True, type="primary" if is_active else "secondary"):
-                st.session_state.current_room = room
+            if st.button("🔴 بوابة Google Connect", use_container_width=True):
+                st.session_state.logged_in = True
+                st.session_state.username = "Google_User"
                 st.rerun()
-                
         with col2:
-            if st.button("🗑️", key=f"delete_{room}", use_container_width=True):
-                del st.session_state.rooms[room]
-                if st.session_state.current_room == room:
-                    st.session_state.current_room = list(st.session_state.rooms.keys()) if st.session_state.rooms else "المحادثة الأولى"
-                    if st.session_state.current_room not in st.session_state.rooms:
-                        st.session_state.rooms[st.session_state.current_room] = []
-                save_chat_backup()
+            if st.button("⚫ بوابة Apple Connect", use_container_width=True):
+                st.session_state.logged_in = True
+                st.session_state.username = "Apple_User"
                 st.rerun()
 
 # ==========================================
-# 4. الشاشة الرئيسية وعرض الرسائل السابقة
+# 3. غرف التحكم والتراسل (بعد الدخول)
 # ==========================================
-st.title(f"💬 {st.session_state.current_room}")
-
-current_chat_history = st.session_state.rooms[st.session_state.current_room]
-
-# عرض الرسائل المخزنة في الغرفة الحالية
-for chat in current_chat_history:
-    role = chat.get("role", "user")
-    content = chat.get("content", "")
-    is_file = chat.get("is_file", False)
-    file_type = chat.get("file_type", "")
+else:
+    st.sidebar.markdown(f"""
+        <div style="background-color: #111827; padding: 15px; border-radius: 14px; text-align: center; border: 1px solid #374151;">
+            <p style="color: #f59e0b; font-weight: bold; margin: 0;">⚡ النظام المطلق نشط</p>
+            <p style="color: #94a3b8; font-size: 12px; margin: 4px 0 0 0;">المستخدم: {st.session_state.username}</p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    if role == "user":
-        with st.chat_message("user", avatar="🧑‍💻"):
-            if is_file and "image" in file_type:
-                st.image(content, caption="الصورة المرفوعة")
-            else:
-                st.markdown(content)
-    elif role == "assistant":
-        with st.chat_message("assistant", avatar="🤖"):
-            st.markdown(content)
+    if st.sidebar.button("🗑️ تصفير الذاكرة المؤقتة", use_container_width=True):
+        st.session_state.openai_messages = []
+        st.session_state.chat_history = []
+        st.rerun()
+    if st.sidebar.button("🚪 تسجيل الخروج الكلي", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.chat_history = []
+        st.session_state.openai_messages = []
+        st.rerun()
 
-# ==========================================
-# 5. منطقة تحميل الملفات وإدخال الرسائل الجديد
-# ==========================================
-
-# إضافة حقل تحميل الملفات في أسفل الشاشة قبل حقل النص
-uploaded_file = st.file_uploader("📎 ارفق صورة أو ملف نصي للمحادثة:", type=["png", "jpg", "jpeg", "txt", "md", "pdf"])
-
-if user_input := st.chat_input("اكتب رسالتك هنا..."):
-    if not client:
-        st.error("⚠️ لم يتم العثور على مفتاح OpenAI API Key في الإعدادات.")
-        st.stop()
-
-    context_text = user_input
-    file_data_to_save = None
-
-    # معالجة الملف المرفوع إن وجد
-    if uploaded_file is not None:
-        file_type = uploaded_file.type
-        
-        # حالة 1: الملف المرفوع صورة
-        if "image" in file_type:
-            # لقراءة وتحليل الصور يفضل استخدام gpt-4o، هنا سنقوم بعرضها وحفظها
-            # ملاحظة: لحفظ الصورة في JSON نقوم بتحويلها لـ Base64 أو مسار محلي، للتبسيط سنعرضها هنا
-            with st.chat_message("user", avatar="🧑‍💻"):
-                st.image(uploaded_file, caption="الصورة المرفوعة")
-            current_chat_history.append({"role": "user", "content": f"[صورة مرفوعة: {uploaded_file.name}]", "is_file": True, "file_type": file_type})
-            context_text = f"المستخدم أرسل صورة باسم ({uploaded_file.name}). ورسالته هي: {user_input}"
-            
-        # حالة 2: الملف المرفوع ملف نصي
-        elif "text" in file_type or uploaded_file.name.endswith(('.txt', '.md')):
-            file_text = uploaded_file.read().decode("utf-8")
-            with st.chat_message("user", avatar="🧑‍💻"):
-                st.markdown(f"📄 **تم رفع ملف:** `{uploaded_file.name}`")
-            current_chat_history.append({"role": "user", "content": f"📄 **ملف مرفق:** {uploaded_file.name}", "is_file": True, "file_type": file_type})
-            # دمج محتوى الملف مع رسالة المستخدم ليفهمها الذكاء الاصطناعي
-            context_text = f"محتوى الملف المرفق ({uploaded_file.name}):\n```\n{file_text}\n```\n\nسؤال المستخدم حول الملف: {user_input}"
-
-    # عرض رسالة النص الحالية للمستخدم
-    with st.chat_message("user", avatar="🧑‍💻"):
-        st.markdown(user_input)
-    
-    # إضافة نص المستخدم النهائي للذاكرة
-    current_chat_history.append({"role": "user", "content": user_input})
-    save_chat_backup()
-
-    # إنشاء مصفوفة الرسائل المخصصة لإرسالها للـ API (تشمل السياق الجديد)
-    api_messages = [
-        {"role": "system", "content": "أنت مساعد ذكي ومفيد تتحدث باللغة العربية بطلاقة وتستطيع تحليل الملفات المرفقة بنصوصها."}
-    ]
-    # إضافة التاريخ القديم
-    for chat in current_chat_history[:-1]:
-        api_messages.append({"role": chat["role"], "content": chat["content"]})
-    # إضافة الرسالة الأخيرة بالسياق الكامل للملف
-    api_messages.append({"role": "user", "content": context_text})
-
-    # بدء توليد الرد مع البث المباشر
-    with st.chat_message("assistant", avatar="🤖"):
-        try:
-            stream_response = client.chat.completions.create(
-                model="gpt-4o", 
-                messages=api_messages,
-                stream=True,
-            )
-            
-            full_response = st.write_stream(stream_response)
-            
-            # حفظ رد المساعد
-            current_chat_history.append({"role": "assistant", "content": full_response})
-            save_chat_backup()
+    if st.session_state.user_role == "admin":
+        st.markdown("<h2 style='color:#f59e0b;'>🛠️ قاعدة البيانات التراكمية</h2>", unsafe_allow_html=True)
+        stored_data = load_brain_data()
+        if stored_data:
+            for item in stored_data: 
+                st.info(item)
+        else: 
+            st.info("الذاكرة طويلة المدى فارغة وبانتظار بيانات جديدة.")
+        if st.button("تصفير الذاكرة الدائمة", use_container_width=True):
+            if os.path.exists(DATA_FILE): 
+                os.remove(DATA_FILE)
+            st.success("تم تصفير النظام!")
             st.rerun()
             
-        except Exception as e:
-            st.error(f"حدث خطأ أثناء الاتصال بالـ API: {e}")
+    else:
+        st.markdown("<h2 style='color:#f59e0b; text-align:center; margin-bottom:20px;'>⚡ محرك الذكاء المطلق والخارق</h2>", unsafe_allow_html=True)
+        
+        for chat in st.session_state.chat_history:
+            if chat["role"] == "user":
+                st.markdown(f'<div style="display: flex; justify-content: flex-start;"><div class="user-bubble"><b>أنت:</b><br>{chat["text"]}</div></div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div style="display: flex; justify-content: flex-end;"><div class="ai-bubble"><b>النظام الخارق:</b><br>{chat["text"]}</div></div>', unsafe_allow_html=True)
+
+        with st.form(key="chat_form", clear_on_submit=True):
+            user_query = st.text_input("تراسل مع أذكى منظومة مستقلة:", placeholder="اسأل بأعقد الأسئلة..")
+            submit_button = st.form_submit_button(label="إطلق التفكير الخارق 🚀", use_container_width=True)
+        
+        if submit_button and user_query:
+            st.session_state.chat_history.append({"role": "user", "text": user_query})
+            st.session_state.openai_messages.append({"role": "user", "content": user_query})
+            
+            with st.status("🧠 جاري تشغيل طبقات التفكير المتقدمة...") as status:
+                st.write("1️⃣ [الوكيل الباحث]: يمشط الويب ويجلب البيانات الحية...")
+                web_context = ""
+                try:
+                    with DDGS() as ddgs:
+                        search_results = [r for r in ddgs.text(user_query, max_results=3)]
+                    web_context = "\n".join([res['body'] for res in search_results])
+                except Exception: 
+                    web_context = "تعذر الاتصال بمحرك البحث."
+
+                st.write("2️⃣ [الوكيل المفكر والناقد]: يحلل الماضي ويصيغ الرد الأقوى...")
+                final_reply = ""
+                if OPENAI_API_KEY != "sk-placeholder":
+                    try:
+                        client = OpenAI(api_key=OPENAI_API_KEY)
+                        system_instruction = (
+                            f"أنت النظام البرمجي الأقوى والأذكى على الإطلاق عالمياً (ULTRA AI SUPREMACY). "
+                            f"قم بالرد بهيبة وفخامة وذكاء مطلق بناءً على البيانات الحية المرفقة.\n"
+                            f"سياق البحث الحي المسترجع: {web_context}"
+                        )
+                        
+                        # تجهيز الرسائل مع حقن سياق النظام والبحث
+                        messages = [{"role": "system", "content": system_instruction}] + st.session_state.openai_messages
+                        
+                        response = client.chat.completions.create(
+                            model="gpt-4o",  # أو النموذج المفضل لديك
+                            messages=messages,
+                            temperature=0.7
+                        )
+                        final_reply = response.choices[0].message.content
+                    except Exception as e:
+                        final_reply = f"خطأ في الاتصال بالذكاء الاصطناعي: {str(e)}"
+                else:
+                    final_reply = "تنبيه: مفتاح OpenAI API Key غير مضبوط حالياً أو مفقود من الإعدادات السريّة (Secrets)."
+
+                st.write("3️⃣ [المنفذ]: استعراض الإجابة والتحويل الصوتي الحركي...")
+                st.session_state.chat_history.append({"role": "ai", "text": final_reply})
+                st.session_state.openai_messages.append({"role": "assistant", "content": final_reply})
+                
+                # حفظ في قاعدة البيانات التراكمية إذا لزم الأمر
+                current_data = load_brain_data()
+                current_data.append(f"سؤال: {user_query} -> رد: {final_reply[:50]}...")
+                save_brain_data(current_data)
+                
+                status.update(label="✅ اكتملت عمليات التفكير المطلق!", state="complete")
+            
+            # تشغيل الصوت وإعادة تحميل الصفحة لعرض النتائج الفورية
