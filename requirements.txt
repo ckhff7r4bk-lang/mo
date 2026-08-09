@@ -1,3 +1,5 @@
 streamlit
 langchain-community
 duckduckgo-search
+requests
+pandas
