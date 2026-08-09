@@ -1,204 +1,158 @@
-import streamlit as st
-import numpy as np
-import pickle
 import os
+import json
+import streamlit as st
 import requests
-import base64
-from duckduckgo_search import DDGS
+from bs4 import BeautifulSoup
 from openai import OpenAI
-from gtts import gTTS
 
-# ==========================================
-# 1. إعدادات الحماية والتصميم الملكي الفاخر
-# ==========================================
-ADMIN_USER = "admin"
-ADMIN_PASSWORD = "my_private_pass_2026"
-DESIGNER_USER = "designer@ai.com"
-DESIGNER_PASSWORD = "admin2026"
+# --- 1. إعدادات قاعدة البيانات والملفات الدائمة ---
+DATABASE_FILE = "ai_brain_db.json"
+SETTINGS_FILE = "site_settings.json"
 
-OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", "sk-placeholder")
-DATA_FILE = "master_data.pkl"
+def load_json(filename, default_structure):
+    if os.path.exists(filename):
+        with open(filename, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return default_structure
 
-st.set_page_config(page_title="المنظومة الخارقة - الذكاء المطلق", page_icon="⚡", layout="centered")
+def save_json(filename, data):
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
-st.markdown("""
+# تحميل البيانات الأساسية
+brain_db = load_json(DATABASE_FILE, {"internet_knowledge": [], "chat_history": [], "rules": []})
+site_settings = load_json(SETTINGS_FILE, {"theme": "داكن (Dark)", "primary_color": "#4A90E2"})
+
+# إعداد عميل OpenAI
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "YOUR_API_KEY_HERE"))
+
+# --- 2. محرك البحث التلقائي واستخراج المعرفة ---
+def search_and_learn(query):
+    """يبحث في الإنترنت، يستخرج النصوص، ويحفظها في عقل الذكاء الاصطناعي تلقائياً"""
+    search_url = f"https://duckduckgo.com{query}"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    
+    try:
+        response = requests.get(search_url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        results = soup.find_all('a', class_='result__snippet')
+        
+        extracted_texts = []
+        for res in results[:3]: # أخذ أفضل 3 نتائج
+            extracted_texts.append(res.get_text().strip())
+        
+        if extracted_texts:
+            full_knowledge = " | ".join(extracted_texts)
+            # حفظ المعرفة المكتسبة حديثاً في الذاكرة الدائمة
+            new_knowledge = {"query": query, "info": full_knowledge}
+            brain_db["internet_knowledge"].append(new_knowledge)
+            save_json(DATABASE_FILE, brain_db)
+            return full_knowledge
+    except Exception as e:
+        return f"فشل البحث التلقائي بسبب: {e}"
+    return "لم يتم العثور على نتائج جديدة."
+
+# --- 3. إدارة مظهر الموقع (Theming) ---
+bg_color = "#121212" if site_settings["theme"] == "داكن (Dark)" else "#F5F7FA"
+text_color = "#FFFFFF" if site_settings["theme"] == "داكن (Dark)" else "#1A1A1A"
+
+st.markdown(f"""
     <style>
-    .stApp { background-color: #030712; color: #f9fafb; }
-    .user-bubble { background-color: #1e3a8a; color: white; padding: 15px 20px; border-radius: 22px 22px 22px 5px; max-width: 80%; font-size: 14px; box-shadow: 0 4px 15px rgba(30, 58, 138, 0.3); margin-bottom: 15px; border: 1px solid #2563eb; }
-    .ai-bubble { background-color: #111827; color: #f9fafb; padding: 15px 20px; border-radius: 22px 22px 5px 22px; max-width: 80%; font-size: 14px; border: 1px solid #d97706; box-shadow: 0 4px 20px rgba(217, 119, 6, 0.15); margin-bottom: 15px; }
+    .stApp {{
+        background-color: {bg_color};
+        color: {text_color};
+    }}
     </style>
 """, unsafe_allow_html=True)
 
-def save_brain_data(data):
-    with open(DATA_FILE, "wb") as f: 
-        pickle.dump(data, f)
+# --- 4. تصميم واجهة المستخدم والموازنة بين الزائر والأدمن ---
+st.title("🤖 نظام الذكاء الاصطناعي الباحث والمستقل")
+tab_visitor, tab_admin = st.tabs(["💬 ساحة الزوار والدردشة", "🔐 لوحة تحكم الأدمن (المشرف)"])
 
-def load_brain_data():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "rb") as f: 
-            return pickle.load(f)
-    return []
-
-def play_voice(text):
-    try:
-        clean_text = text.replace("*", "").replace("#", "")[:120]
-        tts = gTTS(text=clean_text, lang='ar', slow=False)
-        tts.save("response.mp3")
-        with open("response.mp3", "rb") as f: 
-            audio_bytes = f.read()
-        audio_base64 = base64.b64encode(audio_bytes).decode()
-        audio_html = f'<audio src="data:audio/mp3;base64,{audio_base64}" autoplay style="display:none;"></audio>'
-        st.markdown(audio_html, unsafe_allow_html=True)
-        os.remove("response.mp3")
-    except Exception: 
-        pass
-
-if "openai_messages" not in st.session_state: 
-    st.session_state.openai_messages = []
-if "chat_history" not in st.session_state: 
-    st.session_state.chat_history = []
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.user_role = "user"
-    st.session_state.username = ""
-
-# ==========================================
-# 2. واجهة الدخول الموحدة للأسواق
-# ==========================================
-if not st.session_state.logged_in:
-    st.markdown("""
-        <div style="background: linear-gradient(135deg, #090d16, #1e1b4b); padding: 35px; border-radius: 28px; text-align: center; border: 1px solid #d97706; margin-bottom: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.5);">
-            <h1 style="color: #f59e0b; margin: 0; font-size: 32px; font-weight: 900; letter-spacing: 1px;">⚡ ULTRA AI SUPREMACY</h1>
-            <p style="color: #94a3b8; font-size: 14px; margin-top: 5px;">أقوى منظومة ذكاء مستقلة لعام 2026</p>
-        </div>
-    """, unsafe_allow_html=True)
+# ----------------- [ نافذة الزوار ] -----------------
+with tab_visitor:
+    st.subheader("مرحباً بك! أنا ذكاء اصطناعي أمتلك عقلاً نامياً وأبحث في الإنترنت لأجيبك بدقة.")
     
-    tab1, tab2 = st.tabs(["🔒 الدخول بكلمة السر", "🌐 الدخول بحسابات المتاجر"])
-    with tab1:
-        username = st.text_input("اسم المستخدم أو الإيميل")
-        password = st.text_input("كلمة المرور الحامية", type="password")
-        if st.button("ولوج آمن للمنظومة 🚀", use_container_width=True):
-            if username == ADMIN_USER and password == ADMIN_PASSWORD:
-                st.session_state.logged_in = True
-                st.session_state.user_role = "admin"
-                st.session_state.username = username
-                st.rerun()
-            elif username == DESIGNER_USER and password == DESIGNER_PASSWORD:
-                st.session_state.logged_in = True
-                st.session_state.user_role = "designer"
-                st.session_state.username = username
-                st.rerun()
-            else: 
-                st.error("بيانات الحماية غير صحيحة.")
-    with tab2:
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔴 بوابة Google Connect", use_container_width=True):
-                st.session_state.logged_in = True
-                st.session_state.username = "Google_User"
-                st.rerun()
-        with col2:
-            if st.button("⚫ بوابة Apple Connect", use_container_width=True):
-                st.session_state.logged_in = True
-                st.session_state.username = "Apple_User"
-                st.rerun()
+    # إعدادات المظهر للزوار
+    with st.expander("🎨 تخصيص مظهر الموقع (خاص بالزائر)"):
+        chosen_theme = st.selectbox("اختر النمط المفضل لديك:", ["داكن (Dark)", "فاتح (Light)"], index=0 if site_settings["theme"] == "داكن (Dark)" else 1)
+        if chosen_theme != site_settings["theme"]:
+            site_settings["theme"] = chosen_theme
+            save_json(SETTINGS_FILE, site_settings)
+            st.rerun()
 
-# ==========================================
-# 3. غرف التحكم والتراسل (بعد الدخول)
-# ==========================================
-else:
-    st.sidebar.markdown(f"""
-        <div style="background-color: #111827; padding: 15px; border-radius: 14px; text-align: center; border: 1px solid #374151;">
-            <p style="color: #f59e0b; font-weight: bold; margin: 0;">⚡ النظام المطلق نشط</p>
-            <p style="color: #94a3b8; font-size: 12px; margin: 4px 0 0 0;">المستخدم: {st.session_state.username}</p>
-        </div>
-    """, unsafe_allow_html=True)
+    # صندوق المحادثة
+    user_query = st.text_input("اسألني عن أي شيء (سأبحث في الويب تلقائياً إن لم أكن أعرف):", key="visitor_input")
     
-    if st.sidebar.button("🗑️ تصفير الذاكرة المؤقتة", use_container_width=True):
-        st.session_state.openai_messages = []
-        st.session_state.chat_history = []
-        st.rerun()
-    if st.sidebar.button("🚪 تسجيل الخروج الكلي", use_container_width=True):
-        st.session_state.logged_in = False
-        st.session_state.chat_history = []
-        st.session_state.openai_messages = []
-        st.rerun()
+    if user_query:
+        # 1. البحث التلقائي وحفظ البيانات في العقل
+        with st.spinner("🧠 العقل يبحث في الإنترنت ويحفظ المعلومات حالياً..."):
+            web_info = search_and_learn(user_query)
+            
+        # 2. صياغة الرد بناءً على الذاكرة المحفوظة والإنترنت
+        all_past_knowledge = "\n".join([f"- {k['info']}" for k in brain_db["internet_knowledge"][-5:]]) # آخر 5 معلومات مكتسبة
+        
+        system_instruction = f"""
+        أنت ذكاء اصطناعي فائق الذكاء، تسولف بشكل طبيعي وممتاز وودي باللغة العربية كصديق حقيقي.
+        لديك عقل نامٍ، وقد قمت بالبحث في الإنترنت وحفظت هذه المعلومات المفيدة لتجيب منها:
+        {web_info}
+        
+        سياق من معلوماتك السابقة المحفوظة:
+        {all_past_knowledge}
+        """
+        
+        with st.spinner("🤖 صياغة الرد الذكي..."):
+            try:
+                chat_res = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": system_instruction},
+                        {"role": "user", "content": user_query}
+                    ]
+                )
+                ai_reply = chat_res.choices.message.content
+                st.write("### 🤖 الرد المطور:")
+                st.write(ai_reply)
+                
+                # حفظ تاريخ المحادثات للزوار ليتعلم منها النظام
+                brain_db["chat_history"].append({"user": user_query, "ai": ai_reply})
+                save_json(DATABASE_FILE, brain_db)
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء معالجة الرد: {e}")
 
-    if st.session_state.user_role == "admin":
-        st.markdown("<h2 style='color:#f59e0b;'>🛠️ قاعدة البيانات التراكمية</h2>", unsafe_allow_html=True)
-        stored_data = load_brain_data()
-        if stored_data:
-            for item in stored_data: 
-                st.info(item)
-        else: 
-            st.info("الذاكرة طويلة المدى فارغة وبانتظار بيانات جديدة.")
-        if st.button("تصفير الذاكرة الدائمة", use_container_width=True):
-            if os.path.exists(DATA_FILE): 
-                os.remove(DATA_FILE)
-            st.success("تم تصفير النظام!")
+# ----------------- [ لوحة تحكم الأدمن ] -----------------
+with tab_admin:
+    st.subheader("🔐 صلاحيات المالك الحصرية")
+    password = st.text_input("أدخل كلمة مرور الأدمن للوصول المباشر:", type="password")
+    
+    # كلمة المرور الافتراضية (يمكنك تعديلها هنا)
+    if password == "admin123":
+        st.success("تم التحقق بنجاح! أنت تملك الصلاحية الكاملة الآن.")
+        
+        # التحكم بالمعلومات المحفوظة
+        st.write("### 📁 إدارة المعرفة المحفوظة في عقل النظام")
+        st.write("هذه هي البيانات التي جمعها الذكاء الاصطناعي بنفسه من بحث الإنترنت والزوار:")
+        
+        if brain_db["internet_knowledge"]:
+            for idx, item in enumerate(brain_db["internet_knowledge"]):
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.text_area(f"معلومة رقم {idx+1} (عن بحث: {item['query']})", value=item['info'], key=f"info_{idx}")
+                with col2:
+                    if st.button("🗑️ حذف", key=f"del_{idx}"):
+                        brain_db["internet_knowledge"].pop(idx)
+                        save_json(DATABASE_FILE, brain_db)
+                        st.success("تم حذف المعلومة من عقل النظام!")
+                        st.rerun()
+        else:
+            st.info("لا توجد معلومات محفوظة في قاعدة البيانات حتى الآن.")
+            
+        # تصفير الذاكرة بالكامل
+        if st.button("🚨 مسح وعمل فورمت كامل لعقل النظام"):
+            brain_db = {"internet_knowledge": [], "chat_history": [], "rules": []}
+            save_json(DATABASE_FILE, brain_db)
+            st.success("تمت إعادة النظام إلى نقطة الصفر!")
             st.rerun()
             
-    else:
-        st.markdown("<h2 style='color:#f59e0b; text-align:center; margin-bottom:20px;'>⚡ محرك الذكاء المطلق والخارق</h2>", unsafe_allow_html=True)
-        
-        for chat in st.session_state.chat_history:
-            if chat["role"] == "user":
-                st.markdown(f'<div style="display: flex; justify-content: flex-start;"><div class="user-bubble"><b>أنت:</b><br>{chat["text"]}</div></div>', unsafe_allow_html=True)
-            else:
-                st.markdown(f'<div style="display: flex; justify-content: flex-end;"><div class="ai-bubble"><b>النظام الخارق:</b><br>{chat["text"]}</div></div>', unsafe_allow_html=True)
-
-        with st.form(key="chat_form", clear_on_submit=True):
-            user_query = st.text_input("تراسل مع أذكى منظومة مستقلة:", placeholder="اسأل بأعقد الأسئلة..")
-            submit_button = st.form_submit_button(label="إطلق التفكير الخارق 🚀", use_container_width=True)
-        
-        if submit_button and user_query:
-            st.session_state.chat_history.append({"role": "user", "text": user_query})
-            st.session_state.openai_messages.append({"role": "user", "content": user_query})
-            
-            with st.status("🧠 جاري تشغيل طبقات التفكير المتقدمة...") as status:
-                st.write("1️⃣ [الوكيل الباحث]: يمشط الويب ويجلب البيانات الحية...")
-                web_context = ""
-                try:
-                    with DDGS() as ddgs:
-                        search_results = [r for r in ddgs.text(user_query, max_results=3)]
-                    web_context = "\n".join([res['body'] for res in search_results])
-                except Exception: 
-                    web_context = "تعذر الاتصال بمحرك البحث."
-
-                st.write("2️⃣ [الوكيل المفكر والناقد]: يحلل الماضي ويصيغ الرد الأقوى...")
-                final_reply = ""
-                if OPENAI_API_KEY != "sk-placeholder":
-                    try:
-                        client = OpenAI(api_key=OPENAI_API_KEY)
-                        system_instruction = (
-                            f"أنت النظام البرمجي الأقوى والأذكى على الإطلاق عالمياً (ULTRA AI SUPREMACY). "
-                            f"قم بالرد بهيبة وفخامة وذكاء مطلق بناءً على البيانات الحية المرفقة.\n"
-                            f"سياق البحث الحي المسترجع: {web_context}"
-                        )
-                        
-                        # تجهيز الرسائل مع حقن سياق النظام والبحث
-                        messages = [{"role": "system", "content": system_instruction}] + st.session_state.openai_messages
-                        
-                        response = client.chat.completions.create(
-                            model="gpt-4o",  # أو النموذج المفضل لديك
-                            messages=messages,
-                            temperature=0.7
-                        )
-                        final_reply = response.choices[0].message.content
-                    except Exception as e:
-                        final_reply = f"خطأ في الاتصال بالذكاء الاصطناعي: {str(e)}"
-                else:
-                    final_reply = "تنبيه: مفتاح OpenAI API Key غير مضبوط حالياً أو مفقود من الإعدادات السريّة (Secrets)."
-
-                st.write("3️⃣ [المنفذ]: استعراض الإجابة والتحويل الصوتي الحركي...")
-                st.session_state.chat_history.append({"role": "ai", "text": final_reply})
-                st.session_state.openai_messages.append({"role": "assistant", "content": final_reply})
-                
-                # حفظ في قاعدة البيانات التراكمية إذا لزم الأمر
-                current_data = load_brain_data()
-                current_data.append(f"سؤال: {user_query} -> رد: {final_reply[:50]}...")
-                save_brain_data(current_data)
-                
-                status.update(label="✅ اكتملت عمليات التفكير المطلق!", state="complete")
-            
-            # تشغيل الصوت وإعادة تحميل الصفحة لعرض النتائج الفورية
+    elif password != "":
+        st.error("كلمة المرور غير صحيحة! الصلاحية مرفوضة.")
