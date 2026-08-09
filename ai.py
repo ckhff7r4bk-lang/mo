@@ -1,101 +1,190 @@
 import streamlit as st
-from openai import OpenAI
 from langchain_community.tools import DuckDuckGoSearchRun
+import requests
+import sqlite3
+import pandas as pd
+from datetime import datetime
 
-# 1. إعداد واجهة الصفحة
-st.set_page_config(page_title="🤖 المساعد الذكي المجاني الشامل", layout="wide")
-st.title("🤖 المساعد الذكي المجاني الشامل")
-st.caption("ذكاء اصطناعي قوي + بحث مباشر في الإنترنت = مجاني بالكامل 100% وبدون تكلفة")
+# 1. إعداد واجهة التطبيق واحتواء عناصر التصميم المتقدمة
+st.set_page_config(
+    page_title="المساعد الذكي الخارق Pro", 
+    page_icon="🧠",
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
 
-# 2. تجهيز أداة البحث المجانية (DuckDuckGo)
-try:
-    search_tool = DuckDuckGoSearchRun()
-except Exception as e:
-    search_tool = None
-
-# 3. إعداد القائمة الجانبية
-with st.sidebar:
-    st.header("⚙️ الإعدادات المجانية")
-    st.markdown("[اضغط هنا للحصول على مفتاحك المجاني من OpenRouter](https://openrouter.ai)")
-    
-    # إدخال المفتاح المجاني
-    api_key = st.text_input("أدخل مفتاح OpenRouter المجاني:", type="password")
-    
-    # قائمة النماذج المتاحة مجاناً بالكامل على المنصة
-    model_options = {
-        "DeepSeek V3 (الذكاء الأقوى والمجاني)": "deepseek/deepseek-chat",
-        "Meta Llama 3.1 (نموذج فيسبوك المتطور)": "meta-llama/llama-3.1-8b-instruct:free",
-        "Google Gemma 2 (نموذج جوجل السريع والمجاني)": "google/gemma-2-9b-it:free"
+# تخصيص واجهة التطبيق وحقوق المطور عبر CSS المتقدم
+st.markdown("""
+    <style>
+    .main-title { font-size: 2.2rem; font-weight: bold; text-align: center; color: #1E88E5; margin-bottom: 5px; }
+    .sub-title { font-size: 1rem; text-align: center; color: #757575; margin-bottom: 25px; }
+    .developer-footer { position: fixed; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 0.85rem; color: #888; background-color: rgba(255,255,255,0.9); padding: 5px; z-index: 100; border-top: 1px solid #eee; }
+    @media (prefers-color-scheme: dark) {
+        .developer-footer { background-color: rgba(14,17,23,0.9); color: #aaa; border-top: 1px solid #262730; }
     }
-    
-    selected_model_name = st.selectbox("اختر عقل الذكاء الاصطناعي (كلها مجانية):", list(model_options.keys()))
-    selected_model_id = model_options[selected_model_name]
-    
-    # خيار تفعيل تصفح الإنترنت
-    web_search_enabled = st.checkbox("🌐 تفعيل البحث المباشر في الإنترنت", value=False)
+    </style>
+""", unsafe_allow_html=True)
 
-# 4. تهيئة الذاكرة
+# 2. إدارة قاعدة البيانات المحلية (SQLite) وتخزين البيانات المجمعة
+def init_db():
+    conn = sqlite3.connect("app_data.db", check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            date_only TEXT,
+            user_question TEXT,
+            ai_response TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def save_to_db(question, response):
+    conn = sqlite3.connect("app_data.db", check_same_thread=False)
+    cursor = conn.cursor()
+    now = datetime.now()
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
+    date_only = now.strftime("%Y-%m-%d")
+    cursor.execute(
+        "INSERT INTO history (timestamp, date_only, user_question, ai_response) VALUES (?, ?, ?, ?)", 
+        (timestamp, date_only, question, response)
+    )
+    conn.commit()
+    conn.close()
+
+def get_all_history():
+    conn = sqlite3.connect("app_data.db", check_same_thread=False)
+    df = pd.read_sql_query("SELECT * FROM history ORDER BY id DESC", conn)
+    conn.close()
+    return df
+
+def clear_db():
+    conn = sqlite3.connect("app_data.db", check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM history")
+    conn.commit()
+    conn.close()
+
+# تفعيل قاعدة البيانات وتجهيزها للعمل
+init_db()
+
+# 3. إعداد محرك البحث ودالة الاستدعاء المجانية للذكاء الاصطناعي
+@st.cache_resource
+def load_search_engine():
+    try:
+        return DuckDuckGoSearchRun()
+    except Exception:
+        return None
+
+search_tool = load_search_engine()
+
+def query_ai_engine(prompt_text):
+    try:
+        url = "https://pollinations.ai"
+        payload = {
+            "messages": [{"role": "user", "content": prompt_text}],
+            "model": "searchgpt",
+            "json": False
+        }
+        response = requests.post(url, json=payload, timeout=20)
+        if response.status_code == 200:
+            return response.text
+        return "⚠️ النظام يواجه ضغطاً خفيفاً حالياً، يرجى إعادة محاولة إرسال رسالتك."
+    except Exception:
+        return "❌ فشل الاتصال بخادم المعالجة الآمن، تحقق من اتصال الجوال بالإنترنت."
+
+# 4. لوحة تحكم الآدمن المتقدمة (Admin Control Panel) داخل الشريط الجانبي السرّي
+with st.sidebar:
+    st.header("🔑 بوابة تحكم المبرمج")
+    admin_password = st.text_input("أدخل كلمة مرور الآدمن السرية:", type="password")
+    
+    # كلمة المرور الافتراضية
+    if admin_password == "admin123":
+        st.success("🔓 تم تسجيل الدخول بصلاحية الإدارة المطلقة")
+        st.write("---")
+        
+        df_logs = get_all_history()
+        
+        # عرض المؤشرات السريعة
+        st.metric(label="📊 إجمالي الاستفسارات المجمعة", value=len(df_logs))
+        
+        if not df_logs.empty:
+            # إضافة رسم بياني يوضح معدل الاستخدام اليومي للتطبيق
+            st.subheader("📈 نشاط الاستخدام اليومي")
+            daily_counts = df_logs['date_only'].value_counts().sort_index()
+            st.line_chart(daily_counts)
+            
+            # محرك بحث داخلي خاص بالآدمن للتفتيش في السجلات
+            st.subheader("🔍 تصفية والبحث في البيانات")
+            search_keyword = st.text_input("ابحث عن كلمة معينة في الأسئلة المجمعة:")
+            if search_keyword:
+                filtered_df = df_logs[df_logs['user_question'].str.contains(search_keyword, case=False, na=False)]
+                st.dataframe(filtered_df[['timestamp', 'user_question', 'ai_response']])
+            else:
+                st.dataframe(df_logs[['id', 'timestamp', 'user_question', 'ai_response']])
+            
+            # أدوات التحكم بالبيانات واستخراج التقارير
+            st.subheader("⚙️ أدوات البيانات")
+            csv = df_logs.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 تحميل كافة البيانات (Excel / CSV)", data=csv, file_name="developer_collected_data.csv", mime="text/csv")
+            
+            st.write("")
+            if st.button("🗑️ تصفير ومسح قاعدة البيانات نهائياً"):
+                clear_db()
+                st.success("تم مسح السجلات وإعادة تهيئة النظام بنجاح!")
+                st.rerun()
+        else:
+            st.info("قاعدة البيانات فارغة حالياً، لا توجد معلومات مجمعة بعد.")
+            
+    elif admin_password != "":
+        st.error("❌ كلمة المرور غير صحيحة!")
+
+# الواجهة الأساسية التي يراها المستخدمون العاديون والتطبيق بعد التثبيت
+st.markdown('<div class="main-title">🧠 المساعد الذكي الخارق</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">نظام محادثة وبحث فوري ذكي يجمع ويحلل البيانات تلقائياً</div>', unsafe_allow_html=True)
+
+# 5. إدارة جلسة ذاكرة الشات المؤقتة على الشاشة
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "👋 أهلاً بك! أنا مساعدك الذكي المجاني. يمكنني الإجابة مباشرة، أو تصفح الإنترنت وتلخيص النتائج لك إذا قمت بتفعيل خيار البحث الجانبي!"}
+        {"role": "assistant", "content": "👋 أهلاً بك في تطبيقي الذكي المتطور! تم تطوير هذا النظام للبحث في الويب وتلخيص المعلومات فوراً وبشكل مجاني تماماً."}
     ]
 
-# عرض الرسائل السابقة
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
-# 5. معالجة الإدخال
-if user_query := st.chat_input("اكتب سؤالك هنا..."):
+# 6. استقبال مدخلات المستخدمين وحفظها تلقائياً داخل قاعدة البيانات
+if user_query := st.chat_input("اكتب سؤالك أو ما تبحث عنه هنا..."):
     
     with st.chat_message("user"):
         st.write(user_query)
     st.session_state.messages.append({"role": "user", "content": user_query})
     
-    if not api_key:
-        st.error("⚠️ يرجى إدخال مفتاح OpenRouter المجاني من القائمة الجانبية لتشغيل الذكاء الاصطناعي.")
-    else:
-        with st.chat_message("assistant"):
-            # الخطوة أ: إذا كان البحث في الويب مفعلاً
+    with st.chat_message("assistant"):
+        with st.spinner("🔍 جاري تصفح الويب واستخراج البيانات وتحليلها..."):
+            
             context_info = ""
-            if web_search_enabled and search_tool:
-                with st.spinner("🔍 جاري تصفح الويب مجاناً لجلب أحدث المعلومات..."):
-                    try:
-                        context_info = search_tool.invoke(user_query)
-                    except Exception as e:
-                        st.warning(f"تعذر جلب بيانات من الإنترنت: {e}، سيتم الرد بناءً على معلومات الذكاء الاصطناعي فقط.")
-
-            # الخطوة ب: إرسال البيانات للذكاء الاصطناعي ليقوم بالصياغة والرد
-            with st.spinner(f"🧠 جاري التحليل والصياغة باستخدام {selected_model_name}..."):
+            if search_tool:
                 try:
-                    client = OpenAI(
-                        base_url="https://openrouter.aiapi/v1",
-                        api_key=api_key,
-                    )
-                    
-                    # بناء تاريخ المحادثة
-                    formatted_messages = []
-                    
-                    # إذا توفرت معلومات من البحث، ندمجها في رسالة النظام لتوجيه النموذج
-                    if context_info:
-                        formatted_messages.append({
-                            "role": "system",
-                            "content": f"استخدم نتائج البحث الحالية التالية للإجابة على سؤال المستخدم بدقة واحترافية باللغة العربية:\n\n{context_info}"
-                        })
-                    
-                    # إضافة سياق المحادثة المعتاد
-                    for m in st.session_state.messages:
-                        formatted_messages.append({"role": m["role"], "content": m["content"]})
-                    
-                    # طلب الرد من النموذج المجاني
-                    completion = client.chat.completions.create(
-                        model=selected_model_id,
-                        messages=formatted_messages
-                    )
-                    
-                    response = completion.choices.message.content
-                    st.write(response)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-                    
-                except Exception as e:
-                    st.error(f"❌ فشل الاتصال بالنموذج الذكي: {str(e)}")
+                    context_info = search_tool.invoke(user_query)
+                except Exception:
+                    context_info = ""
+
+            system_instruction = "أنت مساعد ذكي ومبرمج باحترافية لتجيب بدقة ووضوح باللغة العربية."
+            if context_info:
+                system_instruction += f" اعتمد على المعلومات الحية الموثوقة التالية للإجابة على سؤال المستخدم بشكل مفصل ومنظم: {context_info}"
+            
+            final_prompt = f"{system_instruction}\n\nالسؤال المطلوب الإجابة عليه الآن هو: {user_query}"
+            
+            ai_response = query_ai_engine(final_prompt)
+            st.write(ai_response)
+            
+            # الحفظ التلقائي والفوري للبيانات المجمعة في الـ Database
+            save_to_db(user_query, ai_response)
+            
+            st.session_state.messages.append({"role": "assistant", "content": ai_response})
+
+# التوقيع البرمجي الثابت لحفظ حقوقك الكاملة كمطور
+st.markdown('<div class="developer-footer">تم التطوير والبرمجة بواسطة المبرمج: 💻 <b>محمد المعلوي</b></div>', unsafe_allow_html=True)
